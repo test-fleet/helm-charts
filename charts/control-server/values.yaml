@@ -1,0 +1,126 @@
+# -----------------------------------------------------------------------------
+# control-server values
+#
+# NOTE ON SCALING: this chart intentionally does not expose a replicaCount.
+# The control server owns scheduling (cron-driven job dispatch) and a
+# startup bootstrap routine (health-check scene creation), neither of which
+# is safe to run from more than one pod at once. The Deployment template
+# hardcodes replicas: 1 and uses a "Recreate" rollout strategy. If you need
+# HA later, that logic needs to be made leader-elected/idempotent first —
+# don't just bump replicas.
+# -----------------------------------------------------------------------------
+
+image:
+  repository: ghcr.io/test-fleet/control-server
+  tag: "latest"          # pin to a release tag or sha-<shortsha> for anything beyond local testing
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+# - name: ghcr-pull-secret
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 80          # port the Service listens on
+  targetPort: 3000   # must match containerPort / PORT below
+
+# -----------------------------------------------------------------------------
+# Non-secret configuration. Rendered into a ConfigMap and injected via envFrom.
+# Mirrors server/.env.example (excluding anything that's a credential — those
+# live under `secrets:` / `existingSecret` below).
+# -----------------------------------------------------------------------------
+config:
+  ENV: "production"
+  NODE_ENV: "production"
+  PORT: "3000"
+  JWT_EXPIRES_IN: "24h"
+  LOG_LEVEL: "info"
+  ORGANIZATION_NAME: ""
+  ALLOWED_DOMAINS: ""
+  BOOTSTRAP_ADMIN_EMAIL: ""
+  OAUTH_PROVIDER: ""          # Google, GitHub, Microsoft, Okta — leave blank to disable OAuth
+  OAUTH_REDIRECT_URL: ""
+  OKTA_DOMAIN: ""             # only used when OAUTH_PROVIDER=Okta
+  REDIS_CHANNEL: "testfleet:jobs"
+  # SERVER_URL is templated by default from the Service DNS name + port; only
+  # set this if you're fronting the service with an Ingress/LB and need the
+  # bootstrap health-check scene to hit the public URL instead.
+  SERVER_URL: ""
+
+# -----------------------------------------------------------------------------
+# Secret configuration.
+#
+# Preferred: point `existingSecret` at a Secret you (or your CI pipeline)
+# create out-of-band, e.g.:
+#
+#   kubectl create secret generic control-server-secrets \
+#     --from-literal=MONGODB_URI='mongodb://user:pass@host:27017/testfleet' \
+#     --from-literal=REDIS_URL='redis://:password@host:6379' \
+#     --from-literal=JWT_SECRET='...' \
+#     --from-literal=MASTER_KEY='...' \
+#     --from-literal=OAUTH_CLIENT_ID='...' \
+#     --from-literal=OAUTH_CLIENT_SECRET='...' \
+#     --dry-run=client -o yaml | kubectl apply -f -
+#
+# This keeps secret material entirely out of `helm install/upgrade` and out
+# of `helm get values`. See the repo README for the GitHub Actions version
+# of the command above.
+#
+# Fallback: set `secrets.create: true` and fill in `secrets.values` to have
+# this chart render the Secret for you (handy for a quick local/dev install
+# via `--set`). Never commit real values this way — pass them with
+# `--set-string` or `-f a-gitignored-file.yaml` at install time.
+# -----------------------------------------------------------------------------
+existingSecret: ""   # e.g. "control-server-secrets" — required keys: MONGODB_URI, REDIS_URL, JWT_SECRET, MASTER_KEY, OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET
+
+secrets:
+  create: false
+  values: {}
+    # MONGODB_URI: ""
+    # REDIS_URL: ""
+    # JWT_SECRET: ""
+    # MASTER_KEY: ""
+    # OAUTH_CLIENT_ID: ""
+    # OAUTH_CLIENT_SECRET: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 15
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+podAnnotations: {}
+podLabels: {}
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false   # server writes to ./logs — set true + add a volume if you want this hardened further
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

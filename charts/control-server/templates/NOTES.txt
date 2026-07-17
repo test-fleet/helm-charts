@@ -1,0 +1,26 @@
+TestFleet control server deployed as {{ include "control-server.fullname" . }}.
+
+This chart always deploys exactly 1 replica — the control server is not
+horizontally scalable in its current form (see values.yaml for why).
+
+Access it inside the cluster at:
+  http://{{ include "control-server.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+
+To reach it from your machine for a quick check:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "control-server.fullname" . }} 3000:{{ .Values.service.port }}
+  curl http://localhost:3000/health
+
+This chart does not deploy MongoDB or Redis — point `existingSecret` (or
+`config.SERVER_URL` / `secrets.values`) at instances you manage separately.
+
+Next step: register your test runners.
+  1. Log in as an admin and call `POST /runners/register` with a runner name.
+     The response includes an apiKey/apiSecret pair — it's shown once, so
+     save it immediately.
+  2. Create a Kubernetes Secret with that pair (see the test-runner chart's
+     README) and add an entry to the test-runner chart's `runners` list
+     pointing at it.
+
+Do NOT reuse one runner's credentials across multiple runner pods — the
+control server flags shared credentials in the UI and it corrupts
+per-runner metrics.

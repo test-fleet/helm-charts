@@ -1,0 +1,76 @@
+# -----------------------------------------------------------------------------
+# test-runner values
+#
+# This chart deploys ONE runner instance, tied to ONE registered identity
+# (an API key/secret pair from `POST /runners/register` on the control
+# server). To run more runners, install this chart again under a different
+# Helm release name with a separately-registered `runnerName` and
+# `existingSecret` — don't just bump replicaCount below.
+#
+#   helm install runner-01 charts/test-runner -f values.yaml \
+#     --set runnerName=prod-runner-01 --set existingSecret=runner-01-creds
+#   helm install runner-02 charts/test-runner -f values.yaml \
+#     --set runnerName=prod-runner-02 --set existingSecret=runner-02-creds
+# -----------------------------------------------------------------------------
+
+# Exposed, but you almost never want to change it. Every pod in this
+# Deployment shares the ONE credential pair below — scaling this past 1
+# means multiple processes authenticating as the same runner identity,
+# which the control server UI explicitly flags ("API credentials are being
+# shared between multiple runners... corrupts per-runner metrics"). Nothing
+# in this chart stops you from setting this to 3, but it's a known-bad
+# pattern for this project, not a supported scaling path.
+replicaCount: 1
+
+runnerName: ""            # required — must match the name used when registering this runner (POST /runners/register)
+existingSecret: ""        # required — name of a Secret containing this runner's API_KEY / API_SECRET
+apiKeySecretKey: "API_KEY"        # override if your Secret uses a different key name
+apiSecretSecretKey: "API_SECRET"  # override if your Secret uses a different key name
+
+image:
+  repository: ghcr.io/test-fleet/test-runner
+  tag: "latest"        # pin to a release tag or sha-<shortsha> for anything beyond local testing
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+# - name: ghcr-pull-secret
+
+nameOverride: ""
+fullnameOverride: ""
+
+# -----------------------------------------------------------------------------
+# Non-secret configuration. Mirrors the test-runner env vars in .env.example.
+# -----------------------------------------------------------------------------
+config:
+  CONTROL_SERVER_URL: ""     # e.g. http://control-server.testfleet.svc.cluster.local
+  REDIS_URL: ""               # leave blank if you're setting REDIS_URL via sharedExistingSecret instead
+  REDIS_CHANNEL: "testfleet:jobs"
+  HEARTBEAT_INTERVAL: "15"
+  MAX_WORKERS: "3"
+
+# Optional: name of a Secret for values like REDIS_URL when it embeds
+# credentials (redis://:password@host:6379). If set, applied via envFrom
+# alongside this runner's own credential secret — leave config.REDIS_URL
+# blank in that case so it doesn't override the secret-sourced value.
+sharedExistingSecret: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+podAnnotations: {}
+podLabels: {}
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -1,0 +1,12 @@
+Deployed runner "{{ .Values.runnerName }}" as {{ include "test-runner.fullname" . }}.
+
+Check it's connected:
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/name={{ include "test-runner.name" . }},app.kubernetes.io/instance={{ .Release.Name }}
+
+Then confirm on the control server side (Runners page in the UI, or
+GET /api/v1/runners) that it shows a recent heartbeat under the name
+"{{ .Values.runnerName }}".
+
+Want another runner? Install this chart again under a new release name with
+a separately-registered `runnerName` and `existingSecret` — don't scale
+this Deployment's replicas past 1.
