@@ -29,7 +29,10 @@ apiSecretSecretKey: "API_SECRET"  # override if your Secret uses a different key
 
 image:
   repository: ghcr.io/test-fleet/test-runner
-  tag: "latest"        # pin to a release tag or sha-<shortsha> for anything beyond local testing
+  # TODO: switch to "latest" once a v0.1 release is published — no "latest"
+  # tag exists yet, only "edge". Pin to a release tag or sha-<shortsha> for
+  # anything beyond local testing.
+  tag: "edge"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -65,9 +68,11 @@ resources:
 podAnnotations: {}
 podLabels: {}
 
-securityContext:
+podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000
+
+securityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: true
 

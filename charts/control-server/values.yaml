@@ -12,7 +12,10 @@
 
 image:
   repository: ghcr.io/test-fleet/control-server
-  tag: "latest"          # pin to a release tag or sha-<shortsha> for anything beyond local testing
+  # TODO: switch to "latest" once a v0.1 release is published — no "latest"
+  # tag exists yet, only "edge". Pin to a release tag or sha-<shortsha> for
+  # anything beyond local testing.
+  tag: "edge"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -115,9 +118,11 @@ serviceAccount:
   annotations: {}
   name: ""
 
-securityContext:
+podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000
+
+securityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: false   # server writes to ./logs — set true + add a volume if you want this hardened further
 
