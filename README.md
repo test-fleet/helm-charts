@@ -15,6 +15,9 @@ helm upgrade --install control-server charts/control-server \
   -f my-control-server-values.yaml
 
 # 2. Register a runner (admin JWT required) — save the returned apiKey/apiSecret, shown once
+#    $ADMIN_TOKEN: log into the UI as an invited/bootstrapped admin (OAuth) and
+#    read the JWT it stores client-side (e.g. `localStorage.getItem('token')`
+#    in the browser console) — there's no separate token-issuing endpoint.
 curl -X POST https://<control-server>/api/v1/runners/register \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{"name": "prod-runner-01"}'

@@ -75,35 +75,48 @@ of trying to pull it.
 
 ## 6. Create the control-server secret and install
 
+There's no static/bootstrap admin token anymore — the control server only grants
+admin access via OAuth login to a pre-invited email. That means you need a real
+OAuth app (e.g. a Google OAuth client) even for local testing; there's no
+"unused-for-this-test" shortcut for `OAUTH_CLIENT_ID`/`OAUTH_CLIENT_SECRET` here.
+
 ```bash
 kubectl -n testfleet create secret generic control-server-secrets \
   --from-literal=MONGODB_URI='mongodb://mongo.testfleet.svc.cluster.local:27017/testfleet' \
   --from-literal=REDIS_URL='redis://redis.testfleet.svc.cluster.local:6379' \
   --from-literal=JWT_SECRET='local-test-secret-change-me' \
   --from-literal=MASTER_KEY='local-test-master-key' \
-  --from-literal=OAUTH_CLIENT_ID='unused-for-this-test' \
-  --from-literal=OAUTH_CLIENT_SECRET='unused-for-this-test'
+  --from-literal=OAUTH_CLIENT_ID='<your Google OAuth client id>' \
+  --from-literal=OAUTH_CLIENT_SECRET='<your Google OAuth client secret>'
 
 helm upgrade --install control-server charts/control-server -n testfleet \
   --set existingSecret=control-server-secrets \
+  --set config.OAUTH_PROVIDER=google \
+  --set config.OAUTH_REDIRECT_URL=http://localhost:3000/api/v1/auth/callback \
+  --set config.BOOTSTRAP_ADMIN_EMAIL=<your-email> \
   -f charts/control-server/values.local.yaml
 ```
+
+`BOOTSTRAP_ADMIN_EMAIL` is the only account invited as admin on first boot —
+you'll log in with this exact email in step 8.
 
 ## 7. Confirm it's healthy
 
 ```bash
 kubectl -n testfleet get pods
 kubectl -n testfleet port-forward svc/control-server 3000:80
-curl http://localhost:3000/health
+curl http://localhost:3000/health   # liveness — cheap, just "is the process up"
+curl http://localhost:3000/ready    # readiness — checks Mongo + Redis connectivity
 ```
 
 ## 8. Grab the admin token and register a runner
 
-The control server prints a deterministic admin JWT on every startup —
-check the logs:
+Open `http://localhost:3000` in a browser and log in with the
+`BOOTSTRAP_ADMIN_EMAIL` account from step 6 (Google OAuth). Once logged in, pull
+your JWT out of local storage — open devtools console and run:
 
-```bash
-kubectl -n testfleet logs deploy/control-server | grep -A2 "STATIC ADMIN JWT"
+```js
+localStorage.getItem('token')
 ```
 
 ```bash

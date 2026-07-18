@@ -104,7 +104,7 @@ probes:
     timeoutSeconds: 5
     failureThreshold: 3
   readiness:
-    path: /health
+    path: /ready
     initialDelaySeconds: 5
     periodSeconds: 10
     timeoutSeconds: 5
