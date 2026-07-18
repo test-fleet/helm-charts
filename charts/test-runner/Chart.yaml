@@ -3,4 +3,4 @@ name: test-runner
 description: TestFleet test runner — stateless scene execution worker. Deploys a single runner instance tied to one registered identity; install again under a new release name for additional runners.
 type: application
 version: 0.1.0
-appVersion: "1.0.0"
+appVersion: "0.1.0"

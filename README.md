@@ -7,6 +7,12 @@ Neither chart deploys MongoDB or Redis — point them at instances you manage se
 
 ## Deploying
 
+`image.tag` defaults to this chart's `appVersion` (see `Chart.yaml`) — an
+immutable, pinned release tag, so you don't need to set it explicitly unless
+you want a different version. The one case where you should override it:
+local/dev testing against `edge` (the latest unreleased build off `main` —
+see TESTING.md for the caveats that come with a moving tag).
+
 ```bash
 # 1. Control server
 helm upgrade --install control-server charts/control-server \
@@ -14,13 +20,9 @@ helm upgrade --install control-server charts/control-server \
   --set existingSecret=control-server-secrets \
   -f my-control-server-values.yaml
 
-# 2. Register a runner (admin JWT required) — save the returned apiKey/apiSecret, shown once
-#    $ADMIN_TOKEN: log into the UI as an invited/bootstrapped admin (OAuth) and
-#    read the JWT it stores client-side (e.g. `localStorage.getItem('token')`
-#    in the browser console) — there's no separate token-issuing endpoint.
-curl -X POST https://<control-server>/api/v1/runners/register \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"name": "prod-runner-01"}'
+# 2. Register a runner — log into the control server's web UI as an admin,
+#    go to Runners → Register Runner, give it a name, and copy the
+#    apiKey/apiSecret it shows you (shown once, so save it immediately).
 
 # 3. Store those creds, then deploy the runner
 kubectl -n testfleet create secret generic runner-01-creds \

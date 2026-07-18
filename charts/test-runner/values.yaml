@@ -29,10 +29,10 @@ apiSecretSecretKey: "API_SECRET"  # override if your Secret uses a different key
 
 image:
   repository: ghcr.io/test-fleet/test-runner
-  # TODO: switch to "latest" once a v0.1 release is published — no "latest"
-  # tag exists yet, only "edge". Pin to a release tag or sha-<shortsha> for
-  # anything beyond local testing.
-  tag: "edge"
+  # Defaults to this chart's appVersion (see Chart.yaml) — an immutable,
+  # pinned release tag. Override to "edge" for local/dev testing against the
+  # latest unreleased build (a moving tag — see TESTING.md for the caveats).
+  tag: ""
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []

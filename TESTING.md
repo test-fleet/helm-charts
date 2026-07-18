@@ -1,13 +1,14 @@
 # Testing these charts locally
 
-This walks through a real smoke test on a local cluster (kind, but minikube
-or Docker Desktop's k8s work the same way — just skip the `kind load`
-steps). Steps 1–2 need no cluster at all — do those first.
+This walks through a real smoke test on a local cluster (examples below show
+kind and k3d side by side; minikube or Docker Desktop's k8s work the same
+way as kind — just skip the image-load steps). Steps 1–2 need no cluster at
+all — do those first.
 
 ## 0. Prereqs
 
-- `helm` (v3), `kubectl`, and `kind` (or another local cluster)
-- `docker` if you're using kind
+- `helm` (v3), `kubectl`, and one of `kind` / `k3d` (or another local cluster)
+- `docker`
 
 ## 1. Lint first — no cluster needed
 
@@ -23,7 +24,16 @@ helm lint charts/test-runner
 This is the most useful check: it renders the actual manifests Helm would
 apply, so you can eyeball them for anything obviously wrong. Both charts
 `fail` fast if required values are missing, so you'll need placeholder
-values even for a dry run:
+values even for a dry run.
+
+First create your own local overrides file for each chart — these are
+gitignored, so put whatever you're iterating on in them (locally-built
+image repo/tag, resource tweaks, etc.); it's fine to start empty:
+
+```bash
+touch charts/control-server/values.local.yaml
+touch charts/test-runner/values.local.yaml
+```
 
 ```bash
 helm template control-server charts/control-server \
@@ -42,7 +52,12 @@ tag, before moving on.
 ## 3. Spin up a cluster and namespace
 
 ```bash
+# kind
 kind create cluster --name testfleet
+
+# k3d
+k3d cluster create testfleet
+
 kubectl create namespace testfleet
 ```
 
@@ -58,20 +73,56 @@ kubectl -n testfleet expose pod mongo --port=27017
 kubectl -n testfleet expose pod redis --port=6379
 ```
 
+**These are bare pods, not Deployments** — nothing restarts them if they get
+killed (node pressure, cluster restart, manual eviction, etc.). The `mongo`
+and `redis` Services stick around either way, which can make it look like
+they're still fine when they're actually not — if `/ready` starts failing
+in step 7, check `kubectl -n testfleet get pods` (and
+`kubectl -n testfleet get endpoints mongo redis`) for missing pods before
+debugging anything else, and just re-run the two `kubectl run` commands
+above to bring them back.
+
 ## 5. Build and load the images (if you're not pulling from GHCR)
 
 ```bash
 docker build -t test-fleet/control-server:local -f dockerfile .
-kind load docker-image test-fleet/control-server:local --name testfleet
-
 docker build -t test-fleet/test-runner:local -f dockerfile .   # from the test-runner repo
+
+# kind
+kind load docker-image test-fleet/control-server:local --name testfleet
 kind load docker-image test-fleet/test-runner:local --name testfleet
+
+# k3d
+k3d image import test-fleet/control-server:local -c testfleet
+k3d image import test-fleet/test-runner:local -c testfleet
 ```
 
 Then set `image.repository`/`image.tag` accordingly in your values (or
 `--set image.repository=test-fleet/control-server --set image.tag=local`),
 and `--set image.pullPolicy=Never` so kubelet uses the loaded image instead
 of trying to pull it.
+
+**If you're pulling `:edge` from GHCR instead of building locally**, note
+that `pullPolicy: IfNotPresent` (the chart default) means a node that's
+already cached an image for the `:edge` tag will keep using that cached
+copy — pushing a new build to `:edge` and restarting the pod is **not**
+enough to pick it up, since the tag name hasn't changed and kubelet only
+checks "do I have something by this name," not "is it current." If your
+change doesn't seem to have landed after a redeploy, evict the stale image
+and force a fresh pull:
+
+```bash
+# kind
+docker exec <kind-node-name> crictl rmi ghcr.io/test-fleet/control-server:edge
+# k3d
+docker exec k3d-testfleet-server-0 crictl rmi ghcr.io/test-fleet/control-server:edge
+
+kubectl -n testfleet rollout restart deployment/control-server
+```
+
+Or sidestep this entirely for local iteration by setting
+`--set image.pullPolicy=Always`, which re-checks the registry on every pod
+start.
 
 ## 6. Create the control-server secret and install
 
@@ -109,24 +160,13 @@ curl http://localhost:3000/health   # liveness — cheap, just "is the process u
 curl http://localhost:3000/ready    # readiness — checks Mongo + Redis connectivity
 ```
 
-## 8. Grab the admin token and register a runner
+## 8. Log in and register a runner
 
 Open `http://localhost:3000` in a browser and log in with the
-`BOOTSTRAP_ADMIN_EMAIL` account from step 6 (Google OAuth). Once logged in, pull
-your JWT out of local storage — open devtools console and run:
-
-```js
-localStorage.getItem('token')
-```
-
-```bash
-export ADMIN_TOKEN="<paste the token>"
-
-curl -X POST http://localhost:3000/api/v1/runners/register \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"name": "local-runner-01"}'
-# => save the returned apiKey/apiSecret
-```
+`BOOTSTRAP_ADMIN_EMAIL` account from step 6 (Google OAuth). Once logged in,
+go to **Runners → Register Runner**, give it a name (e.g. `local-runner-01`),
+and submit. The resulting modal shows the `apiKey`/`apiSecret` pair with copy
+buttons — save both immediately, the secret isn't shown again.
 
 ## 9. Create the runner's secret and install it
 
@@ -145,14 +185,17 @@ helm upgrade --install runner-01 charts/test-runner -n testfleet \
 
 ```bash
 kubectl -n testfleet logs deploy/runner-01-test-runner
-
-curl http://localhost:3000/api/v1/runners \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-# look for local-runner-01 with a recent lastSeen
 ```
+
+Then check the **Runners** page in the UI — `local-runner-01` should show up
+with a recent "last seen" heartbeat.
 
 ## Teardown
 
 ```bash
+# kind
 kind delete cluster --name testfleet
+
+# k3d
+k3d cluster delete testfleet
 ```

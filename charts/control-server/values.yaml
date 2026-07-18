@@ -12,10 +12,10 @@
 
 image:
   repository: ghcr.io/test-fleet/control-server
-  # TODO: switch to "latest" once a v0.1 release is published — no "latest"
-  # tag exists yet, only "edge". Pin to a release tag or sha-<shortsha> for
-  # anything beyond local testing.
-  tag: "edge"
+  # Defaults to this chart's appVersion (see Chart.yaml) — an immutable,
+  # pinned release tag. Override to "edge" for local/dev testing against the
+  # latest unreleased build (a moving tag — see TESTING.md for the caveats).
+  tag: ""
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -28,6 +28,36 @@ service:
   type: ClusterIP
   port: 80          # port the Service listens on
   targetPort: 3000   # must match containerPort / PORT below
+
+# -----------------------------------------------------------------------------
+# Optional Ingress — off by default. This chart doesn't install or assume any
+# particular Ingress controller; it just renders the Ingress resource, so
+# whatever controller (nginx, Traefik, ...) is already running in your
+# cluster picks it up. For TLS, either point `tls.secretName` at a Secret you
+# manage yourself, or add your cert-manager annotation (e.g.
+# `cert-manager.io/cluster-issuer: letsencrypt-prod`) under `annotations` and
+# let it provision the Secret for you.
+#
+# If you enable this, also set `config.SERVER_URL` (above) to the public
+# https:// URL below — that's what the bootstrap health-check scene and any
+# OAuth redirect hit.
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: ""       # e.g. "nginx" or "traefik" — leave blank to use the cluster's default IngressClass
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    []
+    # - host: control-server.example.com
+    #   paths:
+    #     - path: /
+    #       pathType: Prefix
+  tls:
+    []
+    # - secretName: control-server-tls
+    #   hosts:
+    #     - control-server.example.com
 
 # -----------------------------------------------------------------------------
 # Non-secret configuration. Rendered into a ConfigMap and injected via envFrom.

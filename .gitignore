@@ -1,0 +1,5 @@
+# Local-only Helm value overrides — never commit real secrets/tags here.
+# Referenced by TESTING.md / README.md as your own scratch overrides file.
+values.local.yaml
+values.prod.yaml
+*.local.yaml

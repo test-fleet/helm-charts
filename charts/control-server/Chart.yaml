@@ -3,4 +3,4 @@ name: control-server
 description: TestFleet control server — API, scheduler, and UI backend. Deployed as a single instance.
 type: application
 version: 0.1.0
-appVersion: "1.0.0"
+appVersion: "0.1.0"
