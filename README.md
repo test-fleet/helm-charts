@@ -1,6 +1,6 @@
 # TestFleet Helm Charts
 
-TestFleet is a distributed API testing and monitoring tool. You define **Scenes**: cron-scheduled sequences of HTTP requests (**Frames**) with assertions on the response and extractors that pull values into `${variables}` used by later frames in the same run. Each scene runs on schedule (or on demand) across every registered **runner**, and results are aggregated fleet-wide against a configurable pass threshold, so you can tell not just "did this API respond correctly" but "did it respond correctly from every region/network you're testing from." Auth is OAuth-only (Google/GitHub/Microsoft/Okta); there's a web UI for building scenes and reviewing runs, all served by the control server itself.
+TestFleet is a distributed API testing and monitoring tool. You define **Scenes** — cron-scheduled sequences of HTTP requests with assertions and variables passed between them — and each scene runs across every registered [runner](https://github.com/test-fleet/test-runner), with results aggregated against a configurable pass threshold. The [control-server](https://github.com/test-fleet/control-server) hosts the API, scheduler, and web UI.
 
 This repo holds the two Helm charts that deploy it:
 
