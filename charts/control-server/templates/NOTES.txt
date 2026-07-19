@@ -11,15 +11,16 @@ To reach it from your machine for a quick check:
   curl http://localhost:3000/health
 
 This chart does not deploy MongoDB or Redis — point `existingSecret` (or
-`config.SERVER_URL` / `secrets.values`) at instances you manage separately.
+`secrets.values`) at instances you manage separately.
 
 Next step: register your test runners.
-  1. Log in as an admin and call `POST /runners/register` with a runner name.
-     The response includes an apiKey/apiSecret pair — it's shown once, so
-     save it immediately.
-  2. Create a Kubernetes Secret with that pair (see the test-runner chart's
-     README) and add an entry to the test-runner chart's `runners` list
-     pointing at it.
+  1. Log in as an admin in the web UI, go to Runners -> Register Runner, and
+     give it a name. The resulting modal shows an apiKey/apiSecret pair —
+     it's shown once, so save it immediately.
+  2. Create a Kubernetes Secret with that pair, then `helm install` the
+     test-runner chart (a separate release per runner) with `runnerName` and
+     `existingSecret` set to match. See the top-level README for the full
+     walkthrough.
 
 Do NOT reuse one runner's credentials across multiple runner pods — the
 control server flags shared credentials in the UI and it corrupts

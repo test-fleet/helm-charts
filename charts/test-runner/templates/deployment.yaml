@@ -4,6 +4,12 @@
 {{- if not .Values.existingSecret }}
 {{- fail "test-runner: `existingSecret` is required — create a Secret with this runner's API_KEY/API_SECRET and reference it here." }}
 {{- end }}
+{{- if not .Values.config.CONTROL_SERVER_URL }}
+{{- fail "test-runner: `config.CONTROL_SERVER_URL` is required — the runner binary has no fallback and will crash-loop without it." }}
+{{- end }}
+{{- if and (not .Values.config.REDIS_URL) (not .Values.sharedExistingSecret) }}
+{{- fail "test-runner: set either `config.REDIS_URL` or `sharedExistingSecret` (a Secret containing a REDIS_URL key) — the runner binary has no fallback and will crash-loop without one." }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

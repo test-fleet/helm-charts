@@ -10,6 +10,3 @@ data:
   {{ $key }}: {{ $value | quote }}
   {{- end }}
   {{- end }}
-  {{- if not .Values.config.SERVER_URL }}
-  SERVER_URL: {{ printf "http://%s:%v" (include "control-server.fullname" .) .Values.service.port | quote }}
-  {{- end }}

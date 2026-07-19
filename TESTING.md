@@ -2,17 +2,17 @@
 
 This walks through a real smoke test on a local cluster (examples below show
 kind and k3d side by side; minikube or Docker Desktop's k8s work the same
-way as kind — just skip the image-load steps). Steps 1–2 need no cluster at
-all — do those first.
+way as kind, just skip the image-load steps). Steps 1 and 2 need no cluster
+at all; do those first.
 
 ## 0. Prereqs
 
 - `helm` (v3), `kubectl`, and one of `kind` / `k3d` (or another local cluster)
 - `docker`
 
-Everything below uses the local chart source (`charts/control-server`, `charts/test-runner`) — the right thing when you're iterating on the templates themselves. If you instead want to sanity-check the chart as actually published to GHCR (e.g. right after `.github/workflows/publish-charts.yml` runs, before anyone else pulls it), see [Testing the published GHCR chart](#testing-the-published-ghcr-chart) near the end — steps 1–5 don't apply there, but 6 onward are the same with one flag swapped.
+Everything below uses the local chart source (`charts/control-server`, `charts/test-runner`): the right thing when you're iterating on the templates themselves. If you instead want to sanity-check the chart as actually published to GHCR (e.g. right after `.github/workflows/publish-charts.yml` runs, before anyone else pulls it), see [Testing the published GHCR chart](#testing-the-published-ghcr-chart) near the end; steps 1 through 5 don't apply there, but 6 onward are the same with one flag swapped.
 
-## 1. Lint first — no cluster needed
+## 1. Lint first (no cluster needed)
 
 Catches template syntax errors before you touch a cluster:
 
@@ -21,14 +21,14 @@ helm lint charts/control-server
 helm lint charts/test-runner
 ```
 
-## 2. Dry-run render — no cluster needed
+## 2. Dry-run render (no cluster needed)
 
 This is the most useful check: it renders the actual manifests Helm would
 apply, so you can eyeball them for anything obviously wrong. Both charts
 `fail` fast if required values are missing, so you'll need placeholder
 values even for a dry run.
 
-First create your own local overrides file for each chart — these are
+First create your own local overrides file for each chart. These are
 gitignored, so put whatever you're iterating on in them (locally-built
 image repo/tag, resource tweaks, etc.); it's fine to start empty:
 
@@ -48,7 +48,7 @@ helm template test-runner charts/test-runner \
   -f charts/test-runner/values.local.yaml
 ```
 
-Read through the output — check the env vars, the probe paths, the image
+Read through the output: check the env vars, the probe paths, the image
 tag, before moving on.
 
 ## 3. Spin up a cluster and namespace
@@ -65,7 +65,7 @@ kubectl create namespace testfleet
 
 ## 4. Get Mongo + Redis running
 
-Neither chart deploys these — for a quick smoke test, throwaway pods are
+Neither chart deploys these. For a quick smoke test, throwaway pods are
 enough (don't reuse this for anything real):
 
 ```bash
@@ -75,10 +75,10 @@ kubectl -n testfleet expose pod mongo --port=27017
 kubectl -n testfleet expose pod redis --port=6379
 ```
 
-**These are bare pods, not Deployments** — nothing restarts them if they get
+**These are bare pods, not Deployments.** Nothing restarts them if they get
 killed (node pressure, cluster restart, manual eviction, etc.). The `mongo`
 and `redis` Services stick around either way, which can make it look like
-they're still fine when they're actually not — if `/ready` starts failing
+they're still fine when they're actually not. If `/ready` starts failing
 in step 7, check `kubectl -n testfleet get pods` (and
 `kubectl -n testfleet get endpoints mongo redis`) for missing pods before
 debugging anything else, and just re-run the two `kubectl run` commands
@@ -107,7 +107,7 @@ of trying to pull it.
 **If you're pulling `:edge` from GHCR instead of building locally**, note
 that `pullPolicy: IfNotPresent` (the chart default) means a node that's
 already cached an image for the `:edge` tag will keep using that cached
-copy — pushing a new build to `:edge` and restarting the pod is **not**
+copy. Pushing a new build to `:edge` and restarting the pod is **not**
 enough to pick it up, since the tag name hasn't changed and kubelet only
 checks "do I have something by this name," not "is it current." If your
 change doesn't seem to have landed after a redeploy, evict the stale image
@@ -128,7 +128,7 @@ start.
 
 ## 6. Create the control-server secret and install
 
-There's no static/bootstrap admin token anymore — the control server only grants
+There's no static/bootstrap admin token anymore. The control server only grants
 admin access via OAuth login to a pre-invited email. That means you need a real
 OAuth app (e.g. a Google OAuth client) even for local testing; there's no
 "unused-for-this-test" shortcut for `OAUTH_CLIENT_ID`/`OAUTH_CLIENT_SECRET` here.
@@ -150,7 +150,7 @@ helm upgrade --install control-server charts/control-server -n testfleet \
   -f charts/control-server/values.local.yaml
 ```
 
-`BOOTSTRAP_ADMIN_EMAIL` is the only account invited as admin on first boot —
+`BOOTSTRAP_ADMIN_EMAIL` is the only account invited as admin on first boot;
 you'll log in with this exact email in step 8.
 
 ## 7. Confirm it's healthy
@@ -158,8 +158,8 @@ you'll log in with this exact email in step 8.
 ```bash
 kubectl -n testfleet get pods
 kubectl -n testfleet port-forward svc/control-server 3000:80
-curl http://localhost:3000/health   # liveness — cheap, just "is the process up"
-curl http://localhost:3000/ready    # readiness — checks Mongo + Redis connectivity
+curl http://localhost:3000/health   # liveness: cheap, just "is the process up"
+curl http://localhost:3000/ready    # readiness: checks Mongo + Redis connectivity
 ```
 
 ## 8. Log in and register a runner
@@ -168,9 +168,11 @@ Open `http://localhost:3000` in a browser and log in with the
 `BOOTSTRAP_ADMIN_EMAIL` account from step 6 (Google OAuth). Once logged in,
 go to **Runners → Register Runner**, give it a name (e.g. `local-runner-01`),
 and submit. The resulting modal shows the `apiKey`/`apiSecret` pair with copy
-buttons — save both immediately, the secret isn't shown again.
+buttons. Save both immediately, the secret isn't shown again.
 
 ## 9. Create the runner's secret and install it
+
+`CONTROL_SERVER_URL` and a Redis URL are both hard-required: the runner binary has no fallback for either, and the chart's `fail` guards refuse to install without them.
 
 ```bash
 kubectl -n testfleet create secret generic runner-01-creds \
@@ -180,6 +182,8 @@ kubectl -n testfleet create secret generic runner-01-creds \
 helm upgrade --install runner-01 charts/test-runner -n testfleet \
   --set runnerName=local-runner-01 \
   --set existingSecret=runner-01-creds \
+  --set config.CONTROL_SERVER_URL=http://control-server.testfleet.svc.cluster.local \
+  --set config.REDIS_URL=redis://redis.testfleet.svc.cluster.local:6379 \
   -f charts/test-runner/values.local.yaml
 ```
 
@@ -189,25 +193,25 @@ helm upgrade --install runner-01 charts/test-runner -n testfleet \
 kubectl -n testfleet logs deploy/runner-01-test-runner
 ```
 
-Then check the **Runners** page in the UI — `local-runner-01` should show up
+Then check the **Runners** page in the UI. `local-runner-01` should show up
 with a recent "last seen" heartbeat.
 
 ## Testing the published GHCR chart
 
-Once `publish-charts.yml` has pushed a version, it's worth confirming that exact OCI artifact installs cleanly before anyone depends on it — this replaces steps 1–5 above; pick back up at step 6, swapping the local chart path for the OCI reference.
+Once `publish-charts.yml` has pushed a version, it's worth confirming that exact OCI artifact installs cleanly before anyone depends on it. This replaces steps 1 through 5 above; pick back up at step 6, swapping the local chart path for the OCI reference.
 
 Pull it down and confirm the version/contents are what you expect:
 
 ```bash
-helm pull oci://ghcr.io/test-fleet/charts/control-server --version 0.1.0 --untar
+helm pull oci://ghcr.io/test-fleet/charts/control-server --version 0.1.1 --untar
 helm lint ./control-server
 ```
 
-Then install straight from GHCR instead of the local path — same install commands as steps 6 and 9, just replace `charts/control-server` / `charts/test-runner` with the OCI reference and add `--version`:
+Then install straight from GHCR instead of the local path. Same install commands as steps 6 and 9, just replace `charts/control-server` / `charts/test-runner` with the OCI reference and add `--version`:
 
 ```bash
 helm upgrade --install control-server oci://ghcr.io/test-fleet/charts/control-server \
-  --version 0.1.0 -n testfleet \
+  --version 0.1.1 -n testfleet \
   --set existingSecret=control-server-secrets \
   --set config.OAUTH_PROVIDER=google \
   --set config.OAUTH_REDIRECT_URL=http://localhost:3000/api/v1/auth/callback \
@@ -215,9 +219,11 @@ helm upgrade --install control-server oci://ghcr.io/test-fleet/charts/control-se
   -f charts/control-server/values.local.yaml
 
 helm upgrade --install runner-01 oci://ghcr.io/test-fleet/charts/test-runner \
-  --version 0.1.0 -n testfleet \
+  --version 0.1.1 -n testfleet \
   --set runnerName=local-runner-01 \
   --set existingSecret=runner-01-creds \
+  --set config.CONTROL_SERVER_URL=http://control-server.testfleet.svc.cluster.local \
+  --set config.REDIS_URL=redis://redis.testfleet.svc.cluster.local:6379 \
   -f charts/test-runner/values.local.yaml
 ```
 
