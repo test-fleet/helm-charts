@@ -11,6 +11,17 @@ This repo holds the two Helm charts that deploy it:
 - **`charts/control-server`**: API/scheduler/UI backend. Always 1 replica.
 - **`charts/test-runner`**: one execution worker per Helm release, tied to one registered runner identity.
 
+## Contents
+
+- [Dependencies](#dependencies)
+- [Deploying](#deploying)
+- [Env var reference](#env-var-reference)
+  - [control-server env vars](#control-server-env-vars)
+  - [test-runner env vars](#test-runner-env-vars)
+- [Using these charts as a dependency](#using-these-charts-as-a-dependency)
+- [Singleton by design](#singleton-by-design)
+- [Secrets](#secrets)
+
 ## Dependencies
 
 Neither chart installs these. Have them ready before you start:
