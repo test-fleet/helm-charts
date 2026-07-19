@@ -38,9 +38,8 @@ service:
 # `cert-manager.io/cluster-issuer: letsencrypt-prod`) under `annotations` and
 # let it provision the Secret for you.
 #
-# If you enable this and OAuth redirects need to land on a different origin
-# than this API (rare — the frontend is embedded and served by this same
-# app), set `config.FRONTEND_URL` (below) to the public https:// URL.
+# The frontend is embedded and served by this same app, so no additional
+# config is needed for OAuth redirects to keep working through an Ingress.
 # -----------------------------------------------------------------------------
 ingress:
   enabled: false
@@ -74,13 +73,6 @@ config:
   OAUTH_PROVIDER: ""          # Google, GitHub, Microsoft, Okta — leave blank to disable OAuth
   OAUTH_REDIRECT_URL: ""
   OKTA_DOMAIN: ""             # only used when OAUTH_PROVIDER=Okta
-  REDIS_CHANNEL: "testfleet:jobs"
-  # Where the OAuth callback redirects the browser after login. Blank (default)
-  # means a same-origin relative redirect, which is correct as long as you're
-  # accessing the embedded frontend from this same host/port (true for
-  # port-forward and most single-Ingress setups) — only set this if the
-  # frontend is reachable at a different origin than this API.
-  FRONTEND_URL: ""
   # Informational only — returned by GET /api/v1/config for the frontend to
   # display; the app defaults to 30000 (ms) if unset. Unrelated to the
   # test-runner chart's own (also optional) HEARTBEAT_INTERVAL.

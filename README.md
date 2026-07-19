@@ -9,7 +9,7 @@ Neither chart installs these. Have them ready before you start:
 
 - **A Kubernetes cluster**, with `kubectl`/`helm` pointed at it.
 - **MongoDB**, reachable from the cluster. control-server's primary datastore.
-- **Redis**, reachable from the cluster. Pub/sub channel control-server and every test-runner use to dispatch and pick up jobs; the `REDIS_CHANNEL` value must match on both sides.
+- **Redis**, reachable from the cluster. control-server publishes scene jobs on a pub/sub channel and every test-runner subscribes to it; the channel name itself is hardcoded (`testfleet:jobs`) on both sides, not something you configure.
 - **An OAuth app**, registered with Google, GitHub, Microsoft, or Okta. There is no local email/password login. Every account authenticates through this provider, so you need its client ID/secret and a callback URL before deploying control-server.
 
 ## Deploying
@@ -62,7 +62,6 @@ config:
   NODE_ENV: production
   PORT: "3000"
   JWT_EXPIRES_IN: 24h
-  REDIS_CHANNEL: testfleet:jobs
   HEARTBEAT_INTERVAL: ""
 ```
 
@@ -70,7 +69,7 @@ config:
 
 ```bash
 helm upgrade --install control-server oci://ghcr.io/test-fleet/charts/control-server \
-  --version 0.1.1 -n testfleet \
+  --version 0.1.3 -n testfleet \
   -f my-control-server-values.yaml
 ```
 
@@ -104,7 +103,6 @@ config:
   REDIS_URL: ""
 
   # optional
-  REDIS_CHANNEL: testfleet:jobs
   MAX_WORKERS: "3"
   HEARTBEAT_INTERVAL: "15"
 
@@ -116,7 +114,7 @@ sharedExistingSecret: ""
 
 ```bash
 helm upgrade --install runner-01 oci://ghcr.io/test-fleet/charts/test-runner \
-  --version 0.1.1 -n testfleet \
+  --version 0.1.2 -n testfleet \
   -f my-test-runner-values.yaml
 ```
 
@@ -142,15 +140,12 @@ Every row below was checked against what each app's source actually reads (`proc
 | `BOOTSTRAP_ADMIN_EMAIL` | config | yes (first install) | the only way to get an initial admin: accounts only exist via OAuth login, there's no other path to admin |
 | `ALLOWED_DOMAINS` | config | required in practice | comma-separated email domains allowed to be invited. `inviteUser()` reads this with no fallback/try-catch, so an unset value throws an uncaught error (not a clean 400) the first time anyone tries to invite a user |
 | `OKTA_DOMAIN` | config | only if `OAUTH_PROVIDER=okta` | |
-| `REDIS_CHANNEL` | config | no (default `testfleet:jobs`) | must match the same var on every test-runner |
 | `ENV` / `NODE_ENV` | config | no (default `production`) | |
 | `PORT` | config | no (default `3000`) | must match `service.targetPort` if changed |
 | `JWT_EXPIRES_IN` | config | no (default `24h`) | |
 | `HEARTBEAT_INTERVAL` | config | no | informational only. Returned by `GET /api/v1/config` for the frontend to display; app defaults to `30000` (ms) if unset. Unrelated to the test-runner chart's own `HEARTBEAT_INTERVAL` |
 
-Not wired into this chart at all, and not needed for a Helm deployment: `API_KEY_A`/`API_SECRET_A`/`API_KEY_B`/`API_SECRET_B` (a dev-only bootstrap that only runs when `ENV=dev`, which the chart never sets), and `MONGO_INITDB_ROOT_USERNAME`/`MONGO_INITDB_ROOT_PASSWORD`/`MONGO_INITDB_DATABASE` (those configure a self-hosted MongoDB container's own bootstrap, not the control server app; this chart doesn't deploy MongoDB). `SERVER_URL`, `LOG_LEVEL`, and `ORGANIZATION_NAME` used to be chart values but were removed in chart `0.1.1`; none of the three were ever read anywhere in server code.
-
-Deliberately left out of this table for now: `FRONTEND_URL` (still present in `values.yaml` as `config.FRONTEND_URL`, still functional). It changes where the OAuth callback redirects the browser after login, but there's no CORS middleware anywhere in the server, so it only half-supports a frontend hosted on a separate origin from this API. Not documenting it as a real option until that's actually built out.
+Not wired into this chart at all, and not needed for a Helm deployment: `API_KEY_A`/`API_SECRET_A`/`API_KEY_B`/`API_SECRET_B` (a dev-only bootstrap that only runs when `ENV=dev`, which the chart never sets), and `MONGO_INITDB_ROOT_USERNAME`/`MONGO_INITDB_ROOT_PASSWORD`/`MONGO_INITDB_DATABASE` (those configure a self-hosted MongoDB container's own bootstrap, not the control server app; this chart doesn't deploy MongoDB). `SERVER_URL`, `LOG_LEVEL`, and `ORGANIZATION_NAME` used to be chart values but were removed in chart `0.1.1`; none of the three were ever read anywhere in server code. `REDIS_CHANNEL` used to be a chart value too but was removed in chart `0.1.2`: both apps now hardcode the same pub/sub channel name (`testfleet:jobs`) rather than reading it from the environment, since it's a shared protocol constant, not a pointer to a distinct resource. `FRONTEND_URL` was removed in chart `0.1.3` along with the app code that read it: it only ever supported redirecting to a frontend hosted on a separate origin from this API, which isn't a real deployment mode without CORS support that was never built, and isn't a goal of this project anyway (single control-server deployment, embedded frontend, one origin, always).
 
 ### test-runner env vars
 
@@ -159,10 +154,11 @@ Deliberately left out of this table for now: `FRONTEND_URL` (still present in `v
 | `API_KEY` / `API_SECRET` | secret | yes | from registering this runner in step 4 above |
 | `CONTROL_SERVER_URL` | config | yes | no fallback in the runner binary; chart refuses to install without it (as of `0.1.1`) |
 | `REDIS_URL` | config or secret | yes | no fallback in the runner binary; chart refuses to install unless this or `sharedExistingSecret` is set (as of `0.1.1`). Plain `config.REDIS_URL` if it has no embedded credential, otherwise put it in `sharedExistingSecret` instead and leave `config.REDIS_URL` blank |
-| `REDIS_CHANNEL` | config | technically yes, but the chart always supplies `testfleet:jobs` | must match control-server's |
 | `RUNNER_NAME` | n/a | yes (chart-enforced) | not part of the step 5 secret. Set via the top-level `runnerName` value on the `helm install` in step 6. The Go binary itself would fall back to `"unnamed-runner"` if this were blank, but the chart's `fail` guard doesn't allow that; you always want a real distinguishing name |
 | `MAX_WORKERS` | config | no (default `3`) | worker pool size. Raise if tests queue up faster than they run |
 | `HEARTBEAT_INTERVAL` | config | no (default `15`) | seconds between heartbeats to the control server |
+
+`REDIS_CHANNEL` used to be a chart value here too but was removed in chart `0.1.2`: the runner binary now hardcodes the same pub/sub channel name control-server does (`testfleet:jobs`), since both sides just need to agree on a string, not point at a distinct resource.
 
 ## Using these charts as a dependency
 
@@ -171,17 +167,17 @@ Reference them from another chart's `Chart.yaml`:
 ```yaml
 dependencies:
   - name: control-server
-    version: "0.1.1"
+    version: "0.1.3"
     repository: "oci://ghcr.io/test-fleet/charts"
   - name: test-runner
-    version: "0.1.1"
+    version: "0.1.2"
     repository: "oci://ghcr.io/test-fleet/charts"
 ```
 
 Then `helm dependency update` as usual. Or pull one standalone:
 
 ```bash
-helm pull oci://ghcr.io/test-fleet/charts/control-server --version 0.1.1
+helm pull oci://ghcr.io/test-fleet/charts/control-server --version 0.1.3
 ```
 
 The publish workflow (`.github/workflows/publish-charts.yml`) skips a chart if that exact version is already in GHCR (OCI tags here are meant to be immutable, same as the app images); bump `version` in `Chart.yaml` to publish a new one. This `version` is the chart's own packaging version, independent of `appVersion`/the app's release tag.
@@ -221,7 +217,7 @@ Then deploy, referencing that Secret by name:
 - name: Deploy
   run: |
     helm upgrade --install control-server oci://ghcr.io/test-fleet/charts/control-server \
-      --version 0.1.1 -n testfleet \
+      --version 0.1.3 -n testfleet \
       --set existingSecret=control-server-secrets --set image.tag=${{ github.sha }} \
       -f values.prod.yaml
 ```

@@ -47,7 +47,6 @@ fullnameOverride: ""
 config:
   CONTROL_SERVER_URL: ""     # e.g. http://control-server.testfleet.svc.cluster.local
   REDIS_URL: ""               # leave blank if you're setting REDIS_URL via sharedExistingSecret instead
-  REDIS_CHANNEL: "testfleet:jobs"
   HEARTBEAT_INTERVAL: "15"
   MAX_WORKERS: "3"
 
