@@ -26,17 +26,14 @@ kubectl create namespace testfleet
 
 These are the credential-shaped values. Everything else is plain config, set in step 3. See the [control-server env var reference](#control-server-env-vars) below for what each one is.
 
-`MASTER_KEY` has a hard format requirement, not just "make it long": it must decode to exactly 32 bytes as hex (64 hex characters), or the app refuses to boot (`crypto.js` does `Buffer.from(process.env.MASTER_KEY, 'hex')` and checks the length). `openssl rand -hex 32` produces a compliant value; nothing else (a plain password, a UUID, `rand -hex` with any other byte count) will work. `JWT_SECRET` has no such format constraint, just needs to be long and random.
+`MASTER_KEY` has a hard format requirement, not just "make it long": it must decode to exactly 32 bytes as hex (64 hex characters), or the app refuses to boot. Generate it with `openssl rand -hex 32`. `JWT_SECRET` has no such constraint, but a random hex key beats a typed-in passphrase; `openssl rand -hex 16` works well.
 
 ```bash
-JWT_SECRET=$(openssl rand -base64 48)
-MASTER_KEY=$(openssl rand -hex 32)   # must be exactly 64 hex chars (32 bytes); anything else and the app refuses to boot
-
 kubectl -n testfleet create secret generic control-server-secrets \
   --from-literal=MONGODB_URI='mongodb://user:pass@host:27017/testfleet' \
   --from-literal=REDIS_URL='redis://:password@host:6379' \
-  --from-literal=JWT_SECRET="$JWT_SECRET" \
-  --from-literal=MASTER_KEY="$MASTER_KEY" \
+  --from-literal=JWT_SECRET='<32 hex char random key>' \
+  --from-literal=MASTER_KEY='<AES-256 key as 64 hex chars>' \
   --from-literal=OAUTH_CLIENT_ID='<from your OAuth provider>' \
   --from-literal=OAUTH_CLIENT_SECRET='<from your OAuth provider>'
 ```

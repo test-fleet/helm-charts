@@ -133,17 +133,14 @@ admin access via OAuth login to a pre-invited email. That means you need a real
 OAuth app (e.g. a Google OAuth client) even for local testing; there's no
 "unused-for-this-test" shortcut for `OAUTH_CLIENT_ID`/`OAUTH_CLIENT_SECRET` here.
 
-`MASTER_KEY` has a hard format requirement: it must decode to exactly 32 bytes as hex (64 hex characters), or the app refuses to boot on startup. A plain placeholder string like `local-test-master-key` is not valid hex and will crash the pod; generate a real one instead.
+`MASTER_KEY` has a hard format requirement: it must decode to exactly 32 bytes as hex (64 hex characters), or the app refuses to boot on startup. A plain placeholder string like `local-test-master-key` is not valid hex and will crash the pod; generate a real one with `openssl rand -hex 32`. `JWT_SECRET` has no such constraint, but `openssl rand -hex 16` beats a typed-in passphrase.
 
 ```bash
-JWT_SECRET=$(openssl rand -base64 48)
-MASTER_KEY=$(openssl rand -hex 32)   # must be exactly 64 hex chars (32 bytes); anything else and the app refuses to boot
-
 kubectl -n testfleet create secret generic control-server-secrets \
   --from-literal=MONGODB_URI='mongodb://mongo.testfleet.svc.cluster.local:27017/testfleet' \
   --from-literal=REDIS_URL='redis://redis.testfleet.svc.cluster.local:6379' \
-  --from-literal=JWT_SECRET="$JWT_SECRET" \
-  --from-literal=MASTER_KEY="$MASTER_KEY" \
+  --from-literal=JWT_SECRET='<32 hex char random key>' \
+  --from-literal=MASTER_KEY='<AES-256 key as 64 hex chars>' \
   --from-literal=OAUTH_CLIENT_ID='<your Google OAuth client id>' \
   --from-literal=OAUTH_CLIENT_SECRET='<your Google OAuth client secret>'
 
