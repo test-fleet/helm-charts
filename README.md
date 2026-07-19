@@ -38,48 +38,25 @@ kubectl -n testfleet create secret generic control-server-secrets \
   --from-literal=OAUTH_CLIENT_SECRET='<from your OAuth provider>'
 ```
 
-### 3. Create the control server's values file
+### 3. Deploy the control server
 
-```bash
-touch my-control-server-values.yaml
-```
-
-Populate it with every `config` var the app reads. Required ones have no default and must be set; the rest match the chart's built-in defaults and are safe to delete. See the [env var reference](#control-server-env-vars) for why each one is there.
-
-```yaml
-existingSecret: control-server-secrets
-
-config:
-  # required
-  OAUTH_PROVIDER: google
-  OAUTH_REDIRECT_URL: https://control-server.example.com/auth/callback
-  BOOTSTRAP_ADMIN_EMAIL: you@example.com
-  ALLOWED_DOMAINS: example.com
-
-  # required only if OAUTH_PROVIDER is okta
-  OKTA_DOMAIN: ""
-
-  # optional
-  ENV: production
-  NODE_ENV: production
-  PORT: "3000"
-  JWT_EXPIRES_IN: 24h
-  HEARTBEAT_INTERVAL: ""
-```
-
-### 4. Deploy the control server
+Every required `config` var goes on the command as a `--set` flag, same idea as the secret above (and just as easy to source from CI secrets/variables in a pipeline). See the [env var reference](#control-server-env-vars) for the full list, including the optional ones with defaults.
 
 ```bash
 helm upgrade --install control-server oci://ghcr.io/test-fleet/charts/control-server \
   --version 0.1.4 -n testfleet \
-  -f my-control-server-values.yaml
+  --set existingSecret=control-server-secrets \
+  --set config.OAUTH_PROVIDER=google \
+  --set config.OAUTH_REDIRECT_URL=https://control-server.example.com/auth/callback \
+  --set config.BOOTSTRAP_ADMIN_EMAIL=you@example.com \
+  --set config.ALLOWED_DOMAINS=example.com
 ```
 
-### 5. Log in and register a runner
+### 4. Log in and register a runner
 
 Log in via OAuth as `BOOTSTRAP_ADMIN_EMAIL`, then in the UI go to **Runners → Register Runner**, give it a name, and copy the `apiKey`/`apiSecret` it shows you. It's shown once, so save it immediately.
 
-### 6. Create that runner's secret
+### 5. Create that runner's secret
 
 ```bash
 kubectl -n testfleet create secret generic runner-01-creds \
@@ -87,40 +64,20 @@ kubectl -n testfleet create secret generic runner-01-creds \
   --from-literal=API_SECRET='<returned apiSecret>'
 ```
 
-### 7. Create the runner's values file
+### 6. Deploy the runner
 
-```bash
-touch my-test-runner-values.yaml
-```
-
-`runnerName` must match the name you registered in step 5. `CONTROL_SERVER_URL` and a Redis URL (either `config.REDIS_URL` or `sharedExistingSecret`) are hard-required: the runner binary has no fallback for either and will crash-loop without them (the chart now refuses to install without at least one Redis option set). See the [test-runner env var reference](#test-runner-env-vars) for the rest.
-
-```yaml
-runnerName: prod-runner-01
-existingSecret: runner-01-creds
-
-config:
-  # required
-  CONTROL_SERVER_URL: http://control-server.testfleet.svc.cluster.local
-  REDIS_URL: ""
-
-  # optional
-  MAX_WORKERS: "3"
-  HEARTBEAT_INTERVAL: "15"
-
-# required instead of config.REDIS_URL if that URL embeds credentials
-sharedExistingSecret: ""
-```
-
-### 8. Deploy the runner
+`runnerName` must match the name you registered in step 4. `CONTROL_SERVER_URL` and a Redis URL (either `config.REDIS_URL` or `sharedExistingSecret`) are hard-required: the runner binary has no fallback for either and will crash-loop without them (the chart refuses to install without at least one Redis option set). See the [test-runner env var reference](#test-runner-env-vars) for the rest.
 
 ```bash
 helm upgrade --install runner-01 oci://ghcr.io/test-fleet/charts/test-runner \
   --version 0.1.3 -n testfleet \
-  -f my-test-runner-values.yaml
+  --set runnerName=prod-runner-01 \
+  --set existingSecret=runner-01-creds \
+  --set config.CONTROL_SERVER_URL=http://control-server.testfleet.svc.cluster.local \
+  --set config.REDIS_URL=redis://:password@host:6379
 ```
 
-Need another runner? Repeat steps 5 through 8 with a new name and release name (`runner-02`, ...); don't scale `runner-01` instead (see [Singleton by design](#singleton-by-design)).
+Need another runner? Repeat steps 4 through 6 with a new name and release name (`runner-02`, ...); don't scale `runner-01` instead (see [Singleton by design](#singleton-by-design)).
 
 Working from a clone of this repo instead (e.g. testing unreleased chart changes, or an `edge` app build, see TESTING.md)? Swap the `oci://ghcr.io/test-fleet/charts/<chart>` + `--version` in any command above for the local path, e.g. `charts/control-server`.
 
