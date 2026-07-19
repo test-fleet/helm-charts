@@ -26,12 +26,17 @@ kubectl create namespace testfleet
 
 These are the credential-shaped values. Everything else is plain config, set in step 3. See the [control-server env var reference](#control-server-env-vars) below for what each one is.
 
+`MASTER_KEY` has a hard format requirement, not just "make it long": it must decode to exactly 32 bytes as hex (64 hex characters), or the app refuses to boot (`crypto.js` does `Buffer.from(process.env.MASTER_KEY, 'hex')` and checks the length). `openssl rand -hex 32` produces a compliant value; nothing else (a plain password, a UUID, `rand -hex` with any other byte count) will work. `JWT_SECRET` has no such format constraint, just needs to be long and random.
+
 ```bash
+JWT_SECRET=$(openssl rand -base64 48)
+MASTER_KEY=$(openssl rand -hex 32)   # must be exactly 64 hex chars (32 bytes); anything else and the app refuses to boot
+
 kubectl -n testfleet create secret generic control-server-secrets \
   --from-literal=MONGODB_URI='mongodb://user:pass@host:27017/testfleet' \
   --from-literal=REDIS_URL='redis://:password@host:6379' \
-  --from-literal=JWT_SECRET='<generate a long random string>' \
-  --from-literal=MASTER_KEY='<generate a long random string>' \
+  --from-literal=JWT_SECRET="$JWT_SECRET" \
+  --from-literal=MASTER_KEY="$MASTER_KEY" \
   --from-literal=OAUTH_CLIENT_ID='<from your OAuth provider>' \
   --from-literal=OAUTH_CLIENT_SECRET='<from your OAuth provider>'
 ```
@@ -196,7 +201,7 @@ Both charts take an `existingSecret` name rather than any real secret values. He
 
 **From GitHub Actions:** have the workflow materialize the Secret right before deploying, then let Helm reference it by name. Two separate steps.
 
-`--dry-run=client -o yaml | kubectl apply -f -` makes this step idempotent, safe to re-run on every deploy:
+`--dry-run=client -o yaml | kubectl apply -f -` makes this step idempotent, safe to re-run on every deploy. When you create the `MASTER_KEY` GitHub Secret itself, generate it with `openssl rand -hex 32`; anything that isn't exactly 64 hex characters makes the app refuse to boot:
 
 ```yaml
 - name: Sync control-server secret
