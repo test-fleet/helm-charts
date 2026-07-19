@@ -10,6 +10,8 @@ all — do those first.
 - `helm` (v3), `kubectl`, and one of `kind` / `k3d` (or another local cluster)
 - `docker`
 
+Everything below uses the local chart source (`charts/control-server`, `charts/test-runner`) — the right thing when you're iterating on the templates themselves. If you instead want to sanity-check the chart as actually published to GHCR (e.g. right after `.github/workflows/publish-charts.yml` runs, before anyone else pulls it), see [Testing the published GHCR chart](#testing-the-published-ghcr-chart) near the end — steps 1–5 don't apply there, but 6 onward are the same with one flag swapped.
+
 ## 1. Lint first — no cluster needed
 
 Catches template syntax errors before you touch a cluster:
@@ -189,6 +191,37 @@ kubectl -n testfleet logs deploy/runner-01-test-runner
 
 Then check the **Runners** page in the UI — `local-runner-01` should show up
 with a recent "last seen" heartbeat.
+
+## Testing the published GHCR chart
+
+Once `publish-charts.yml` has pushed a version, it's worth confirming that exact OCI artifact installs cleanly before anyone depends on it — this replaces steps 1–5 above; pick back up at step 6, swapping the local chart path for the OCI reference.
+
+Pull it down and confirm the version/contents are what you expect:
+
+```bash
+helm pull oci://ghcr.io/test-fleet/charts/control-server --version 0.1.0 --untar
+helm lint ./control-server
+```
+
+Then install straight from GHCR instead of the local path — same install commands as steps 6 and 9, just replace `charts/control-server` / `charts/test-runner` with the OCI reference and add `--version`:
+
+```bash
+helm upgrade --install control-server oci://ghcr.io/test-fleet/charts/control-server \
+  --version 0.1.0 -n testfleet \
+  --set existingSecret=control-server-secrets \
+  --set config.OAUTH_PROVIDER=google \
+  --set config.OAUTH_REDIRECT_URL=http://localhost:3000/api/v1/auth/callback \
+  --set config.BOOTSTRAP_ADMIN_EMAIL=<your-email> \
+  -f charts/control-server/values.local.yaml
+
+helm upgrade --install runner-01 oci://ghcr.io/test-fleet/charts/test-runner \
+  --version 0.1.0 -n testfleet \
+  --set runnerName=local-runner-01 \
+  --set existingSecret=runner-01-creds \
+  -f charts/test-runner/values.local.yaml
+```
+
+If either package was pushed as private (see README's note on GHCR visibility), you'll need `helm registry login ghcr.io` with a token that has `read:packages` before either command above will pull.
 
 ## Teardown
 
