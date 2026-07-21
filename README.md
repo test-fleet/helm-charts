@@ -63,7 +63,7 @@ Every required `config` var goes on the command as a `--set` flag, same idea as 
 
 ```bash
 helm upgrade --install control-server oci://ghcr.io/test-fleet/charts/control-server \
-  --version 0.1.4 -n testfleet \
+  --version 0.1.6 -n testfleet \
   --set existingSecret=control-server-secrets \
   --set config.OAUTH_PROVIDER=google \
   --set config.OAUTH_REDIRECT_URL=https://control-server.example.com/auth/callback \
@@ -106,35 +106,35 @@ Every row below was checked against what each app's source actually reads (`proc
 
 ### control-server env vars
 
-| Var | Kind | Required? | Notes |
-|---|---|---|---|
-| `MONGODB_URI` | secret | yes | |
-| `REDIS_URL` | secret | yes | |
-| `JWT_SECRET` | secret | yes | signs session JWTs |
-| `MASTER_KEY` | secret | yes | AES-256-GCM key encrypting every runner's API_SECRET at rest. Must be exactly 64 hex characters (32 bytes); the app refuses to boot otherwise. `openssl rand -hex 32` |
-| `OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET` | secret | yes | from your registered OAuth app |
-| `OAUTH_PROVIDER` | config | yes | one of `google`/`github`/`microsoft`/`okta`; there is no local-auth fallback |
-| `OAUTH_REDIRECT_URL` | config | yes | must match the callback URL registered with your OAuth app |
-| `BOOTSTRAP_ADMIN_EMAIL` | config | yes (first install) | the only way to get an initial admin: accounts only exist via OAuth login, there's no other path to admin |
-| `ALLOWED_DOMAINS` | config | required in practice | comma-separated email domains allowed to be invited. `inviteUser()` reads this with no fallback/try-catch, so an unset value throws an uncaught error (not a clean 400) the first time anyone tries to invite a user |
-| `OKTA_DOMAIN` | config | only if `OAUTH_PROVIDER=okta` | |
-| `ENV` / `NODE_ENV` | config | no (default `production`) | |
-| `PORT` | config | no (default `3000`) | must match `service.targetPort` if changed |
-| `JWT_EXPIRES_IN` | config | no (default `24h`) | |
-| `HEARTBEAT_INTERVAL` | config | no | informational only. Returned by `GET /api/v1/config` for the frontend to display; app defaults to `30000` (ms) if unset. Unrelated to the test-runner chart's own `HEARTBEAT_INTERVAL` |
+| Var                                       | Kind   | Required?                     | Notes                                                                                                                                                                                                                |
+| ----------------------------------------- | ------ | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MONGODB_URI`                             | secret | yes                           |                                                                                                                                                                                                                      |
+| `REDIS_URL`                               | secret | yes                           |                                                                                                                                                                                                                      |
+| `JWT_SECRET`                              | secret | yes                           | signs session JWTs                                                                                                                                                                                                   |
+| `MASTER_KEY`                              | secret | yes                           | AES-256-GCM key encrypting every runner's API_SECRET at rest. Must be exactly 64 hex characters (32 bytes); the app refuses to boot otherwise. `openssl rand -hex 32`                                                |
+| `OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET` | secret | yes                           | from your registered OAuth app                                                                                                                                                                                       |
+| `OAUTH_PROVIDER`                          | config | yes                           | one of `google`/`github`/`microsoft`/`okta`; there is no local-auth fallback                                                                                                                                         |
+| `OAUTH_REDIRECT_URL`                      | config | yes                           | must match the callback URL registered with your OAuth app                                                                                                                                                           |
+| `BOOTSTRAP_ADMIN_EMAIL`                   | config | yes (first install)           | the only way to get an initial admin: accounts only exist via OAuth login, there's no other path to admin                                                                                                            |
+| `ALLOWED_DOMAINS`                         | config | required in practice          | comma-separated email domains allowed to be invited. `inviteUser()` reads this with no fallback/try-catch, so an unset value throws an uncaught error (not a clean 400) the first time anyone tries to invite a user |
+| `OKTA_DOMAIN`                             | config | only if `OAUTH_PROVIDER=okta` |                                                                                                                                                                                                                      |
+| `ENV` / `NODE_ENV`                        | config | no (default `production`)     |                                                                                                                                                                                                                      |
+| `PORT`                                    | config | no (default `3000`)           | must match `service.targetPort` if changed                                                                                                                                                                           |
+| `JWT_EXPIRES_IN`                          | config | no (default `24h`)            |                                                                                                                                                                                                                      |
+| `HEARTBEAT_INTERVAL`                      | config | no                            | informational only. Returned by `GET /api/v1/config` for the frontend to display; app defaults to `30000` (ms) if unset. Unrelated to the test-runner chart's own `HEARTBEAT_INTERVAL`                               |
 
 Not wired into this chart at all, and not needed for a Helm deployment: `API_KEY_A`/`API_SECRET_A`/`API_KEY_B`/`API_SECRET_B` (a dev-only bootstrap that only runs when `ENV=dev`, which the chart never sets), and `MONGO_INITDB_ROOT_USERNAME`/`MONGO_INITDB_ROOT_PASSWORD`/`MONGO_INITDB_DATABASE` (those configure a self-hosted MongoDB container's own bootstrap, not the control server app; this chart doesn't deploy MongoDB). `SERVER_URL`, `LOG_LEVEL`, and `ORGANIZATION_NAME` used to be chart values but were removed in chart `0.1.1`; none of the three were ever read anywhere in server code. `REDIS_CHANNEL` used to be a chart value too but was removed in chart `0.1.2`: both apps now hardcode the same pub/sub channel name (`testfleet:jobs`) rather than reading it from the environment, since it's a shared protocol constant, not a pointer to a distinct resource. `FRONTEND_URL` was removed in chart `0.1.3` along with the app code that read it: it only ever supported redirecting to a frontend hosted on a separate origin from this API, which isn't a real deployment mode without CORS support that was never built, and isn't a goal of this project anyway (single control-server deployment, embedded frontend, one origin, always).
 
 ### test-runner env vars
 
-| Var | Kind | Required? | Notes |
-|---|---|---|---|
-| `API_KEY` / `API_SECRET` | secret | yes | from registering this runner in step 4 above |
-| `CONTROL_SERVER_URL` | config | yes | no fallback in the runner binary; chart refuses to install without it (as of `0.1.1`) |
-| `REDIS_URL` | config or secret | yes | no fallback in the runner binary; chart refuses to install unless this or `sharedExistingSecret` is set (as of `0.1.1`). Plain `config.REDIS_URL` if it has no embedded credential, otherwise put it in `sharedExistingSecret` instead and leave `config.REDIS_URL` blank |
-| `RUNNER_NAME` | n/a | yes (chart-enforced) | not part of the step 5 secret. Set via the top-level `runnerName` value on the `helm install` in step 6. The Go binary itself would fall back to `"unnamed-runner"` if this were blank, but the chart's `fail` guard doesn't allow that; you always want a real distinguishing name |
-| `MAX_WORKERS` | config | no (default `3`) | worker pool size. Raise if tests queue up faster than they run |
-| `HEARTBEAT_INTERVAL` | config | no (default `15`) | seconds between heartbeats to the control server |
+| Var                      | Kind             | Required?            | Notes                                                                                                                                                                                                                                                                               |
+| ------------------------ | ---------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `API_KEY` / `API_SECRET` | secret           | yes                  | from registering this runner in step 4 above                                                                                                                                                                                                                                        |
+| `CONTROL_SERVER_URL`     | config           | yes                  | no fallback in the runner binary; chart refuses to install without it (as of `0.1.1`)                                                                                                                                                                                               |
+| `REDIS_URL`              | config or secret | yes                  | no fallback in the runner binary; chart refuses to install unless this or `sharedExistingSecret` is set (as of `0.1.1`). Plain `config.REDIS_URL` if it has no embedded credential, otherwise put it in `sharedExistingSecret` instead and leave `config.REDIS_URL` blank           |
+| `RUNNER_NAME`            | n/a              | yes (chart-enforced) | not part of the step 5 secret. Set via the top-level `runnerName` value on the `helm install` in step 6. The Go binary itself would fall back to `"unnamed-runner"` if this were blank, but the chart's `fail` guard doesn't allow that; you always want a real distinguishing name |
+| `MAX_WORKERS`            | config           | no (default `3`)     | worker pool size. Raise if tests queue up faster than they run                                                                                                                                                                                                                      |
+| `HEARTBEAT_INTERVAL`     | config           | no (default `15`)    | seconds between heartbeats to the control server                                                                                                                                                                                                                                    |
 
 `REDIS_CHANNEL` used to be a chart value here too but was removed in chart `0.1.2`: the runner binary now hardcodes the same pub/sub channel name control-server does (`testfleet:jobs`), since both sides just need to agree on a string, not point at a distinct resource.
 
@@ -145,7 +145,7 @@ Reference them from another chart's `Chart.yaml`:
 ```yaml
 dependencies:
   - name: control-server
-    version: "0.1.4"
+    version: "0.1.6"
     repository: "oci://ghcr.io/test-fleet/charts"
   - name: test-runner
     version: "0.1.3"
@@ -155,7 +155,7 @@ dependencies:
 Then `helm dependency update` as usual. Or pull one standalone:
 
 ```bash
-helm pull oci://ghcr.io/test-fleet/charts/control-server --version 0.1.4
+helm pull oci://ghcr.io/test-fleet/charts/control-server --version 0.1.6
 ```
 
 The publish workflow (`.github/workflows/publish-charts.yml`) skips a chart if that exact version is already in GHCR (OCI tags here are meant to be immutable, same as the app images); bump `version` in `Chart.yaml` to publish a new one. This `version` is the chart's own packaging version, independent of `appVersion`/the app's release tag.
@@ -195,7 +195,7 @@ Then deploy, referencing that Secret by name:
 - name: Deploy
   run: |
     helm upgrade --install control-server oci://ghcr.io/test-fleet/charts/control-server \
-      --version 0.1.4 -n testfleet \
+      --version 0.1.6 -n testfleet \
       --set existingSecret=control-server-secrets --set image.tag=${{ github.sha }} \
       -f values.prod.yaml
 ```
