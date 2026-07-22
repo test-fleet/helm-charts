@@ -205,7 +205,7 @@ Once `publish-charts.yml` has pushed a version, it's worth confirming that exact
 Pull it down and confirm the version/contents are what you expect:
 
 ```bash
-helm pull oci://ghcr.io/test-fleet/charts/control-server --version 0.1.4 --untar
+helm pull oci://ghcr.io/test-fleet/charts/control-server --version 0.1.7 --untar
 helm lint ./control-server
 ```
 
@@ -213,7 +213,7 @@ Then install straight from GHCR instead of the local path. Same install commands
 
 ```bash
 helm upgrade --install control-server oci://ghcr.io/test-fleet/charts/control-server \
-  --version 0.1.4 -n testfleet \
+  --version 0.1.7 -n testfleet \
   --set existingSecret=control-server-secrets \
   --set config.OAUTH_PROVIDER=google \
   --set config.OAUTH_REDIRECT_URL=http://localhost:3000/api/v1/auth/callback \

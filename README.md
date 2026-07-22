@@ -63,7 +63,7 @@ Every required `config` var goes on the command as a `--set` flag, same idea as 
 
 ```bash
 helm upgrade --install control-server oci://ghcr.io/test-fleet/charts/control-server \
-  --version 0.1.6 -n testfleet \
+  --version 0.1.7 -n testfleet \
   --set existingSecret=control-server-secrets \
   --set config.OAUTH_PROVIDER=google \
   --set config.OAUTH_REDIRECT_URL=https://control-server.example.com/auth/callback \
@@ -145,7 +145,7 @@ Reference them from another chart's `Chart.yaml`:
 ```yaml
 dependencies:
   - name: control-server
-    version: "0.1.6"
+    version: "0.1.7"
     repository: "oci://ghcr.io/test-fleet/charts"
   - name: test-runner
     version: "0.1.3"
@@ -155,7 +155,7 @@ dependencies:
 Then `helm dependency update` as usual. Or pull one standalone:
 
 ```bash
-helm pull oci://ghcr.io/test-fleet/charts/control-server --version 0.1.6
+helm pull oci://ghcr.io/test-fleet/charts/control-server --version 0.1.7
 ```
 
 The publish workflow (`.github/workflows/publish-charts.yml`) skips a chart if that exact version is already in GHCR (OCI tags here are meant to be immutable, same as the app images); bump `version` in `Chart.yaml` to publish a new one. This `version` is the chart's own packaging version, independent of `appVersion`/the app's release tag.
@@ -195,7 +195,7 @@ Then deploy, referencing that Secret by name:
 - name: Deploy
   run: |
     helm upgrade --install control-server oci://ghcr.io/test-fleet/charts/control-server \
-      --version 0.1.6 -n testfleet \
+      --version 0.1.7 -n testfleet \
       --set existingSecret=control-server-secrets --set image.tag=${{ github.sha }} \
       -f values.prod.yaml
 ```
